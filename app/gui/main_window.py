@@ -66,7 +66,7 @@ class MainWindow(QWidget):
         user = self.user_in.text().strip()
         keypath = self.keypath_in.text().strip() or None
 
-        if host is None or user is None:
-            self.log(f'Host and user is required.')
+        if host == '' or user == '':
+            self.log(f'Host and user are required.')
         else:
             self.log(f'Attempting to authenticate {user}@{host}:{port}...')
