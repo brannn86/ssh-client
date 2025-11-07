@@ -70,3 +70,20 @@ class MainWindow(QWidget):
             self.log(f'Host and user are required.')
         else:
             self.log(f'Attempting to authenticate {user}@{host}:{port}...')
+            return
+            
+            # Simple Zero Trust check (synchronous for prototype)
+        ok, reason = self.auth.pre_check(user=user, host=host, keypath=keypath)
+        if not ok:
+            self.log(f'AUTH DENIED: {reason}')
+            return
+
+        self.log('Auth OK — opening SSH session (see logs)...')
+        try:
+            chan = self.ssh_manager.open_session(host=host, port=port, username=user, key_filename=keypath)
+            if chan:
+                self.log('SSH session established. You can type commands in the remote shell (prototype does not implement input capture yet).')
+            else:
+                self.log('Failed to obtain interactive channel.')
+        except Exception as e:
+                self.log(f'Connection error: {e}')
