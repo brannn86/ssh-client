@@ -22,13 +22,13 @@ Clone the project
 Go to the project directory
 
 ```bash
-    cd ssh-client
+  cd ssh-client
 ```
 
 Install dependencies
 
 ```bash
-    pip install -r requirements.txt
+  pip install -r requirements.txt
 ```
 
 Run the program
