@@ -2,8 +2,8 @@ from PySide6.QtWidgets import (
 QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QTextEdit
 )
 from PySide6.QtCore import Qt
-# from app.backend.ssh_client import SSHClientManager
-# from app.backend.auth import ZeroTrustAuth
+from app.backend.ssh_client import SSHClientManager
+from app.backend.auth import ZeroTrustAuth
 
 
 class MainWindow(QWidget):
@@ -13,8 +13,8 @@ class MainWindow(QWidget):
         self.resize(800, 600)
         self._build_ui()
         self.log(f'Welcome to Zero Trust SSH Client. Enter host, username, and port to start connecting.')
-        # self.ssh_manager = SSHClientManager()
-        # self.auth = ZeroTrustAuth()
+        self.ssh_manager = SSHClientManager()
+        self.auth = ZeroTrustAuth()
 
 
     def _build_ui(self):
@@ -23,7 +23,7 @@ class MainWindow(QWidget):
         self.host_in = QLineEdit()
         self.host_in.setPlaceholderText('host (e.g. 192.168.1.100)')
         self.port_in = QLineEdit()
-        self.port_in.setPlaceholderText('port (2222)')
+        self.port_in.setPlaceholderText('port (22)')
         self.port_in.setFixedWidth(80)
         self.user_in = QLineEdit()
         self.user_in.setPlaceholderText('username')
@@ -66,13 +66,9 @@ class MainWindow(QWidget):
         user = self.user_in.text().strip()
         keypath = self.keypath_in.text().strip() or None
 
-        if host == '' or user == '':
-            self.log(f'Host and user are required.')
-        else:
-            self.log(f'Attempting to authenticate {user}@{host}:{port}...')
-            return
-            
-            # Simple Zero Trust check (synchronous for prototype)
+        self.log(f'Attempting to authenticate {user}@{host}:{port}...')
+
+        # Simple Zero Trust check (synchronous for prototype)
         ok, reason = self.auth.pre_check(user=user, host=host, keypath=keypath)
         if not ok:
             self.log(f'AUTH DENIED: {reason}')
