@@ -2,7 +2,7 @@
 It performs local checks: key file exists, policy allows host/user, and returns a tuple (ok, reason).
 """
 import os
-from app.models.policy import PolicyStore
+from models.policy import PolicyStore
 
 
 class ZeroTrustAuth:

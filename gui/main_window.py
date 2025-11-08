@@ -2,8 +2,8 @@ from PySide6.QtWidgets import (
 QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QTextEdit
 )
 from PySide6.QtCore import Qt
-from app.backend.ssh_client import SSHClientManager
-from app.backend.auth import ZeroTrustAuth
+from backend.ssh_client import SSHClientManager
+from backend.auth import ZeroTrustAuth
 
 
 class MainWindow(QWidget):
