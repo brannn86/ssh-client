@@ -10,6 +10,10 @@
         "rm -rf",
         "sudo su -"
       ]
+    },
+    "bob": {
+      "allowed_hosts": [],
+      "blocked_commands": []
     }
   }
 }

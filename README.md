@@ -40,11 +40,11 @@ Run the program
 
 ## Roadmap
 
-- Base UI Functionality
+- Base UI Functionality done
 
-- SSH Connection using Paramiko
+- SSH Connection using Paramiko done
 
-- Zero Trust auth and checks
+- Zero Trust auth and checks 
 
 - Store connection policies
 
