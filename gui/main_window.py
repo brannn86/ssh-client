@@ -5,6 +5,8 @@ from PySide6.QtWidgets import (
 from PySide6.QtWidgets import QInputDialog
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont, QColor
+import threading
+import time
 from backend.ssh_client import SSHClientManager
 from backend.auth import ZeroTrustAuth
 from gui.config import ConfigPanel
@@ -19,6 +21,9 @@ class TerminalWidget(QTextEdit):
         self.history_index = -1
         self.current_input_line = 0
         self.prompt = '> '
+        self.ssh_channel = None  # paramiko SSH channel
+        self.read_thread = None
+        self.thread_running = False
         
         # terminal styling
         font = QFont('Courier')
@@ -28,6 +33,38 @@ class TerminalWidget(QTextEdit):
         
         # initialize with prompt
         self._print_prompt()
+    
+    def set_ssh_channel(self, channel):
+        """Set the paramiko SSH channel for interactive I/O."""
+        self.ssh_channel = channel
+        if channel:
+            self._start_read_thread()
+    
+    def _start_read_thread(self):
+        """Start a background thread to read from the SSH channel."""
+        if self.thread_running:
+            return
+        self.thread_running = True
+        self.read_thread = threading.Thread(target=self._read_channel_loop, daemon=True)
+        self.read_thread.start()
+    
+    def _read_channel_loop(self):
+        """Read output from SSH channel in background and display it."""
+        try:
+            while self.thread_running and self.ssh_channel:
+                # check if data is available (non-blocking)
+                if self.ssh_channel.recv_ready():
+                    data = self.ssh_channel.recv(1024)
+                    if data:
+                        text = data.decode('utf-8', errors='replace')
+                        # display output via Qt signal-safe method
+                        self.log(text.rstrip('\r\n'))
+                else:
+                    time.sleep(0.1)
+        except Exception as e:
+            # connection closed or error
+            self.log(f'[SSH connection closed: {e}]')
+            self.thread_running = False
     
     def _print_prompt(self):
         """Add a new prompt line."""
@@ -53,7 +90,24 @@ class TerminalWidget(QTextEdit):
         else:
             # no prompt, just append
             self.append(text)
+            # only add new prompt if not connected to SSH
+            if not self.ssh_channel:
+                self._print_prompt()
+    
+    def _send_command_to_ssh(self, command: str):
+        """Send command to SSH channel and await response."""
+        if not self.ssh_channel:
+            self.log('[No SSH channel connected]')
             self._print_prompt()
+            return
+        
+        try:
+            # send command with newline
+            self.ssh_channel.send(command + '\n')
+            # small delay for command to execute
+            time.sleep(0.2)
+        except Exception as e:
+            self.log(f'[SSH send error: {e}]')
     
     def keyPressEvent(self, event):
         """Handle key presses: Return for command, Up/Down for history."""
@@ -73,11 +127,32 @@ class TerminalWidget(QTextEdit):
                 
                 # print command as echo
                 self.append('')
+                self.append(command)
                 
-                # emit signal or call handler (for now, just print)
-                # you can extend this to actually execute commands
-                self.append(f'[command entered: {command}]')
-                self._print_prompt()
+                # handle built-in commands
+                if command.lower() == 'clear':
+                    self.clear()
+                    self._print_prompt()
+                elif command.lower() == 'exit':
+                    if self.ssh_channel:
+                        self.log('[Closing SSH connection]')
+                        self.thread_running = False
+                        try:
+                            self.ssh_channel.close()
+                        except Exception:
+                            pass
+                        self.ssh_channel = None
+                        self._print_prompt()
+                    else:
+                        self.log('[No SSH connection to close]')
+                        self._print_prompt()
+                elif self.ssh_channel:
+                    # send to SSH channel
+                    self._send_command_to_ssh(command)
+                else:
+                    # no SSH, just echo
+                    self.log(f'[local: {command}]')
+                    self._print_prompt()
             else:
                 # empty command, just add new prompt
                 self.append('')
@@ -252,6 +327,8 @@ class MainWindow(QMainWindow):
             chan = self.ssh_manager.open_session(host=host, port=port, username=user, key_filename=keypath)
             if chan:
                 self.log('SSH session established.')
+                # connect SSH channel to terminal for interactive I/O
+                self.terminal.set_ssh_channel(chan)
             else:
                 self.log('Failed to obtain interactive channel.')
         except Exception as e:
