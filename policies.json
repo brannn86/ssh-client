@@ -4,7 +4,8 @@
       "allowed_hosts": [
         "127.0.0.1",
         "localhost",
-        "192.168.1.100"
+        "192.168.1.100",
+        "envs.net"
       ],
       "blocked_commands": [
         "rm -rf",

@@ -5,6 +5,7 @@ from PySide6.QtWidgets import (
     QListWidget, QListWidgetItem, QPushButton, 
     QMessageBox, QHBoxLayout, QComboBox, QInputDialog
 )
+from PySide6.QtCore import Qt
 
 CONFIG_PATH = Path(__file__).resolve().parent.parent / "policies.json"
 
@@ -38,11 +39,23 @@ class ConfigPanel(QWidget):
         self.user_field = QLineEdit()
         self.form_layout.addRow("Username:", self.user_field)
 
+        # Allowed Hosts section
+        allowed_hosts_layout = QVBoxLayout()
         self.allowed_hosts_list = QListWidget()
-        self.form_layout.addRow("Allowed Hosts:", self.allowed_hosts_list)
+        allowed_hosts_layout.addWidget(self.allowed_hosts_list)
+        add_host_btn = QPushButton("➕ Add Host")
+        add_host_btn.clicked.connect(self.add_allowed_host)
+        allowed_hosts_layout.addWidget(add_host_btn)
+        self.form_layout.addRow("Allowed Hosts:", allowed_hosts_layout)
 
+        # Blocked Commands section
+        blocked_cmds_layout = QVBoxLayout()
         self.blocked_commands_list = QListWidget()
-        self.form_layout.addRow("Blocked Commands:", self.blocked_commands_list)
+        blocked_cmds_layout.addWidget(self.blocked_commands_list)
+        add_cmd_btn = QPushButton("➕ Add Command")
+        add_cmd_btn.clicked.connect(self.add_blocked_command)
+        blocked_cmds_layout.addWidget(add_cmd_btn)
+        self.form_layout.addRow("Blocked Commands:", blocked_cmds_layout)
 
         self.layout.addLayout(self.form_layout)
 
@@ -65,15 +78,19 @@ class ConfigPanel(QWidget):
         # Load allowed hosts
         self.allowed_hosts_list.clear()
         for host in user_data.get("allowed_hosts", []):
-            self.allowed_hosts_list.addItem(QListWidgetItem(host))
+            item = QListWidgetItem(host)
+            item.setFlags(item.flags() | Qt.ItemIsEditable)
+            self.allowed_hosts_list.addItem(item)
 
         # Load blocked commands
         self.blocked_commands_list.clear()
         for cmd in user_data.get("blocked_commands", []):
-            self.blocked_commands_list.addItem(QListWidgetItem(cmd))
+            item = QListWidgetItem(cmd)
+            item.setFlags(item.flags() | Qt.ItemIsEditable)
+            self.blocked_commands_list.addItem(item)
 
     def add_user(self):
-        username, ok = QInputDialog.getText(self, "Add User", "Enter new username:")
+        username, ok = QInputDialog.getText(self, "Add User", "Enter new user:")
         if ok and username.strip():
             username = username.strip()
             if username in self.config_data["users"]:
@@ -100,6 +117,20 @@ class ConfigPanel(QWidget):
             else:
                 QMessageBox.warning(self, "No Users", "All users deleted. Add a new one.")
                 self.add_user()
+
+    def add_allowed_host(self):
+        host, ok = QInputDialog.getText(self, "Add Host", "Enter host address:")
+        if ok and host.strip():
+            item = QListWidgetItem(host.strip())
+            item.setFlags(item.flags() | Qt.ItemIsEditable)
+            self.allowed_hosts_list.addItem(item)
+
+    def add_blocked_command(self):
+        cmd, ok = QInputDialog.getText(self, "Add Command", "Enter command to block:")
+        if ok and cmd.strip():
+            item = QListWidgetItem(cmd.strip())
+            item.setFlags(item.flags() | Qt.ItemIsEditable)
+            self.blocked_commands_list.addItem(item)
 
     def save_config(self):
         username = self.user_field.text().strip()

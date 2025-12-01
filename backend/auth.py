@@ -8,9 +8,14 @@ from models.policy import PolicyStore
 class ZeroTrustAuth:
     def __init__(self, policy_path: str = 'policies.json'):
         self.policy = PolicyStore(policy_path)
+        self.debug_bypass = False  # DEBUG: Set to True to bypass policy checks
 
 
     def pre_check(self, user: str, host: str, keypath: str = None):
+        # DEBUG: Bypass all checks if debug_bypass is enabled
+        if self.debug_bypass:
+            return True, 'DEBUG: Policy check bypassed'
+
         # Check key existence if provided
         if keypath:
             if not os.path.exists(keypath):
@@ -25,3 +30,8 @@ class ZeroTrustAuth:
 
         # Placeholder for additional checks (device fingerprint, geolocation, etc.)
         return True, 'ok'
+
+    def toggle_debug_bypass(self):
+        """DEBUG: Toggle policy bypass for debugging."""
+        self.debug_bypass = not self.debug_bypass
+        return self.debug_bypass

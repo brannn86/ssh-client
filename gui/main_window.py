@@ -2,10 +2,123 @@ from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QLineEdit, QPushButton, QTextEdit, QDockWidget
 )
+from PySide6.QtWidgets import QInputDialog
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QFont, QColor
 from backend.ssh_client import SSHClientManager
 from backend.auth import ZeroTrustAuth
 from gui.config import ConfigPanel
+
+
+class TerminalWidget(QTextEdit):
+    """A terminal-like text widget that allows typing input and displaying output."""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.command_history = []
+        self.history_index = -1
+        self.current_input_line = 0
+        self.prompt = '> '
+        
+        # terminal styling
+        font = QFont('Courier')
+        font.setPointSize(10)
+        self.setFont(font)
+        self.setStyleSheet('background-color: #1e1e1e; color: #d4d4d4;')
+        
+        # initialize with prompt
+        self._print_prompt()
+    
+    def _print_prompt(self):
+        """Add a new prompt line."""
+        self.append(self.prompt)
+        self.current_input_line = self.document().blockCount() - 1
+        self.moveCursor(self.textCursor().__class__.End)
+    
+    def log(self, text: str):
+        """Print output to terminal (read-only line)."""
+        # move to end, remove the prompt temporarily
+        cursor = self.textCursor()
+        cursor.movePosition(cursor.MoveOperation.End)
+        
+        # get current line (the one with prompt)
+        block = self.document().findBlock(cursor.position())
+        line_text = block.text()
+        
+        # if we have a prompt, insert output above it
+        if line_text.startswith(self.prompt):
+            cursor.movePosition(cursor.MoveOperation.StartOfBlock)
+            cursor.insertText(text + '\n')
+            self.setTextCursor(cursor)
+        else:
+            # no prompt, just append
+            self.append(text)
+            self._print_prompt()
+    
+    def keyPressEvent(self, event):
+        """Handle key presses: Return for command, Up/Down for history."""
+        if event.key() == Qt.Key.Key_Return or event.key() == Qt.Key.Key_Enter:
+            # get current line text
+            cursor = self.textCursor()
+            block = self.document().findBlock(cursor.position())
+            line_text = block.text()
+            
+            # extract command (remove prompt)
+            command = line_text.replace(self.prompt, '', 1).strip()
+            
+            if command:
+                # store in history
+                self.command_history.append(command)
+                self.history_index = -1
+                
+                # print command as echo
+                self.append('')
+                
+                # emit signal or call handler (for now, just print)
+                # you can extend this to actually execute commands
+                self.append(f'[command entered: {command}]')
+                self._print_prompt()
+            else:
+                # empty command, just add new prompt
+                self.append('')
+                self._print_prompt()
+        
+        elif event.key() == Qt.Key.Key_Up:
+            # show previous command
+            if self.command_history:
+                if self.history_index < len(self.command_history) - 1:
+                    self.history_index += 1
+                    self._replace_current_command(self.command_history[-(self.history_index + 1)])
+            event.accept()
+        
+        elif event.key() == Qt.Key.Key_Down:
+            # show next command
+            if self.history_index > 0:
+                self.history_index -= 1
+                self._replace_current_command(self.command_history[-(self.history_index + 1)])
+            elif self.history_index == 0:
+                self.history_index = -1
+                self._replace_current_command('')
+            event.accept()
+        
+        else:
+            # normal key press
+            super().keyPressEvent(event)
+    
+    def _replace_current_command(self, new_cmd: str):
+        """Replace the current input command in the prompt line."""
+        cursor = self.textCursor()
+        block = self.document().findBlock(cursor.position())
+        block_num = block.blockNumber()
+        
+        # select from prompt end to end of line
+        cursor.movePosition(cursor.MoveOperation.StartOfBlock)
+        cursor.movePosition(cursor.MoveOperation.EndOfBlock, cursor.MoveMode.KeepAnchor)
+        
+        # delete and rewrite
+        cursor.removeSelectedText()
+        cursor.insertText(self.prompt + new_cmd)
+        self.setTextCursor(cursor)
 
 
 class MainWindow(QMainWindow):
@@ -15,6 +128,12 @@ class MainWindow(QMainWindow):
         self.resize(800, 600)
 
         self.config_dock = None  # dock reference
+        # global debug mode (off by default). When enabled this toggles:
+        # - policy bypass in auth
+        # - debug key logging output
+        # - (future) other debug helpers
+        self.debug_mode = False
+        self.debug_key_logging = False
 
         self._build_ui()
 
@@ -45,9 +164,11 @@ class MainWindow(QMainWindow):
         self.connect_btn = QPushButton('Connect')
         self.config_btn = QPushButton('Config')
         self.log_btn = QPushButton('Log')
+        self.debug_btn = QPushButton('🐛 Debug')
 
         self.connect_btn.clicked.connect(self.on_connect)
         self.config_btn.clicked.connect(self.show_config_panel)
+        self.debug_btn.clicked.connect(self.on_toggle_debug)
 
         # add widgets
         form.addWidget(QLabel('Host:'))
@@ -59,12 +180,12 @@ class MainWindow(QMainWindow):
         form.addWidget(self.keypath_in)
         form.addWidget(self.connect_btn)
         form.addWidget(self.config_btn)
+        form.addWidget(self.debug_btn)
         form.addWidget(self.log_btn)
 
         layout.addLayout(form)
 
-        self.terminal = QTextEdit()
-        self.terminal.setReadOnly(True)
+        self.terminal = TerminalWidget()
         layout.addWidget(self.terminal)
 
         central_widget.setLayout(layout)
@@ -72,6 +193,36 @@ class MainWindow(QMainWindow):
 
     def log(self, text: str):
         self.terminal.append(text)
+
+    def _log_debug_key_attempts(self):
+        """If debug logging is enabled, dump the SSHClientManager.debug_key_attempts entries.
+
+        Marked clearly with DEBUG so you can disable it later.
+        """
+        if not getattr(self, 'debug_key_logging', False):
+            return
+        if not hasattr(self, 'ssh_manager'):
+            return
+        attempts = getattr(self.ssh_manager, 'debug_key_attempts', None)
+        if not attempts:
+            return
+        self.log('--- DEBUG: attempted private key loads ---')
+        for entry in attempts:
+            # two kinds of entries: per-path summary with 'attempts', or single success
+            if 'attempts' in entry:
+                self.log(f"DEBUG: path={entry['path']}")
+                for a in entry['attempts']:
+                    used = 'with-passphrase' if a.get('used_password') else 'no-passphrase'
+                    err = a.get('error')
+                    if err:
+                        self.log(f"DEBUG:   loader={a.get('loader')} {used} -> ERROR: {err}")
+                    else:
+                        self.log(f"DEBUG:   loader={a.get('loader')} {used} -> OK")
+            else:
+                used = 'with-passphrase' if entry.get('used_password') else 'no-passphrase'
+                res = entry.get('result', 'unknown')
+                self.log(f"DEBUG: path={entry.get('path')} loader={entry.get('loader')} {used} -> {res}")
+        self.log('--- end DEBUG ---')
 
     def show_config_panel(self):
         if self.config_dock is None:
@@ -104,4 +255,58 @@ class MainWindow(QMainWindow):
             else:
                 self.log('Failed to obtain interactive channel.')
         except Exception as e:
+            err = str(e).lower()
+            # Detect encrypted private key error and prompt for passphrase
+            if 'encrypted' in err or 'passwordrequiredexception' in err:
+                # Prompt user for passphrase (password echo hidden)
+                passphrase, ok = QInputDialog.getText(self, 'Private Key Passphrase',
+                                                      'Enter passphrase for private key:', QLineEdit.Password)
+                if ok and passphrase:
+                    try:
+                        chan = self.ssh_manager.open_session(host=host, port=port, username=user,
+                                                             key_filename=keypath, key_passphrase=passphrase)
+                        if chan:
+                            self.log('SSH session established (using provided passphrase).')
+                            return
+                        else:
+                            self.log('Failed to obtain interactive channel (after passphrase).')
+                    except Exception as e2:
+                        self.log(f'Connection error after passphrase: {e2}')
+                        # dump debug info about key attempts if available
+                        self._log_debug_key_attempts()
+                        return
+                else:
+                    self.log('Passphrase not provided; aborting connection.')
+                    self._log_debug_key_attempts()
+                    return
             self.log(f'Connection error: {e}')
+            # dump debug info about key attempts if available
+            self._log_debug_key_attempts()
+
+    def on_debug_bypass(self):
+        """Deprecated compatibility shim: kept for older wiring."""
+        # prefer using on_toggle_debug which controls multiple debug behaviors
+        return
+
+    def on_toggle_debug(self):
+        """Toggle global debug mode: policy bypass, debug logs, etc."""
+        self.debug_mode = not self.debug_mode
+        # enable/disable policy bypass on auth
+        try:
+            # auth exposes debug_bypass attribute
+            self.auth.debug_bypass = self.debug_mode
+        except Exception:
+            # fallback to toggle method if present
+            if hasattr(self.auth, 'toggle_debug_bypass'):
+                # ensure toggle_debug_bypass results in desired state
+                cur = getattr(self.auth, 'debug_bypass', False)
+                if cur != self.debug_mode:
+                    self.auth.toggle_debug_bypass()
+
+        # enable/disable key-debug logging
+        self.debug_key_logging = self.debug_mode
+
+        status = 'ON' if self.debug_mode else 'OFF'
+        self.log(f'🐛 DEBUG {status} — bypass={self.debug_mode}, key-logs={self.debug_key_logging}')
+        # visual indicator: red when enabled
+        self.debug_btn.setStyleSheet('background-color: #ff6b6b;' if self.debug_mode else '')
