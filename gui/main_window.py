@@ -108,7 +108,87 @@ class TerminalWidget(QTextEdit):
             time.sleep(0.2)
         except Exception as e:
             self.log(f'[SSH send error: {e}]')
+        
+    def mousePressEvent(self, event):
+        """Prevent clicking on text outside the current line."""
+        cursor = self.textCursor()
+        cursor.setPosition(self.cursorForPosition(event.pos()).position())
+        block = cursor.block()
+        pos_in_block = cursor.positionInBlock()
+        
+        # Only allow clicks on the last (current input) line
+        if block.blockNumber() != self.document().blockCount() - 1:
+            # Clicked on old text, move to end instead
+            cursor.movePosition(cursor.MoveOperation.End)
+            self.setTextCursor(cursor)
+            return
+        
+        # Allow click only after the prompt
+        if pos_in_block < len(self.prompt):
+            cursor.setPosition(block.position() + len(self.prompt))
+            self.setTextCursor(cursor)
+            return
+        
+        super().mousePressEvent(event)
     
+    def insertFromMimeData(self, source):
+        """Only allow paste on the current input line."""
+        cursor = self.textCursor()
+        block = cursor.block()
+        pos_in_block = cursor.positionInBlock()
+        
+        # Only allow on last line, after prompt
+        if block.blockNumber() == self.document().blockCount() - 1 and pos_in_block >= len(self.prompt):
+            super().insertFromMimeData(source)
+    
+    def cut(self):
+        """Only allow cut on the current input line."""
+        cursor = self.textCursor()
+        block = cursor.block()
+        
+        if block.blockNumber() == self.document().blockCount() - 1:
+            super().cut()
+    
+    def mousePressEvent(self, event):
+        """Prevent clicking on text outside the current line."""
+        cursor = self.textCursor()
+        cursor.setPosition(self.cursorForPosition(event.pos()).position())
+        block = cursor.block()
+        pos_in_block = cursor.positionInBlock()
+        
+        # Only allow clicks on the last (current input) line
+        if block.blockNumber() != self.document().blockCount() - 1:
+            # Clicked on old text, move to end instead
+            cursor.movePosition(cursor.MoveOperation.End)
+            self.setTextCursor(cursor)
+            return
+        
+        # Allow click only after the prompt
+        if pos_in_block < len(self.prompt):
+            cursor.setPosition(block.position() + len(self.prompt))
+            self.setTextCursor(cursor)
+            return
+        
+        super().mousePressEvent(event)
+    
+    def insertFromMimeData(self, source):
+        """Only allow paste on the current input line."""
+        cursor = self.textCursor()
+        block = cursor.block()
+        pos_in_block = cursor.positionInBlock()
+        
+        # Only allow on last line, after prompt
+        if block.blockNumber() == self.document().blockCount() - 1 and pos_in_block >= len(self.prompt):
+            super().insertFromMimeData(source)
+    
+    def cut(self):
+        """Only allow cut on the current input line."""
+        cursor = self.textCursor()
+        block = cursor.block()
+        
+        if block.blockNumber() == self.document().blockCount() - 1:
+            super().cut()
+
     def keyPressEvent(self, event):
         """Handle key presses: Return for command, Up/Down for history."""
         if event.key() == Qt.Key.Key_Return or event.key() == Qt.Key.Key_Enter:
@@ -127,7 +207,6 @@ class TerminalWidget(QTextEdit):
                 
                 # print command as echo
                 self.append('')
-                self.append(command)
                 
                 # handle built-in commands
                 if command.lower() == 'clear':
