@@ -3,12 +3,32 @@ import paramiko
 import socket
 from typing import Optional
 
+# local DB helpers
+try:
+    from db.db import log_session_start, log_session_end, log_event, log_login_attempt
+except Exception:
+    # relative import fallback if package layout differs
+    try:
+        from ..db.db import log_session_start, log_session_end, log_event, log_login_attempt
+    except Exception:
+        # define no-ops if import fails
+        def log_session_start(*args, **kwargs):
+            return None
+        def log_session_end(*args, **kwargs):
+            pass
+        def log_event(*args, **kwargs):
+            pass
+        def log_login_attempt(*args, **kwargs):
+            pass
+
 
 class SSHClientManager:
     def __init__(self):
         self.client = None
         # collected debug info about key loading attempts (list of dicts)
         self.debug_key_attempts = []
+        # current active session id in DB (None when not connected)
+        self.active_session_id = None
 
 
     def open_session(self, host: str, port: int = 22, username: str = None,
@@ -171,11 +191,28 @@ class SSHClientManager:
                 chan = transport.open_session()
                 chan.get_pty()
                 chan.invoke_shell()
+                # record session start in DB (username/host available in args)
+                try:
+                    # store session id for later event logging and end marking
+                    self.active_session_id = log_session_start(username, host)
+                except Exception:
+                    # non-fatal: don't break the connection if logging fails
+                    self.active_session_id = None
                 return chan
             return None
         except (paramiko.ssh_exception.AuthenticationException) as e:
+            # log failed SSH authentication
+            try:
+                log_login_attempt(username, host, port=port, status='failed', reason=f'SSH auth failed: {str(e)}')
+            except Exception:
+                pass
             raise e
         except (socket.error, paramiko.SSHException) as e:
+            # log other connection errors
+            try:
+                log_login_attempt(username, host, port=port, status='failed', reason=f'SSH connection error: {str(e)}')
+            except Exception:
+                pass
             raise e
 
 
@@ -183,3 +220,21 @@ class SSHClientManager:
         if self.client:
             self.client.close()
             self.client = None
+        # mark session end in DB if we have an active session id
+        try:
+            if getattr(self, 'active_session_id', None) is not None:
+                log_session_end(self.active_session_id, status='closed')
+                self.active_session_id = None
+        except Exception:
+            pass
+
+    def log_command(self, command_text: str):
+        """Log an executed command (or other event) associated with the active session."""
+        try:
+            sid = getattr(self, 'active_session_id', None)
+            if sid is not None:
+                # include a short prefix so events are clear
+                log_event(sid, f'cmd: {command_text}')
+        except Exception:
+            # swallow DB errors to avoid breaking terminal I/O
+            pass

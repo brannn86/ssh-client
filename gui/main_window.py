@@ -10,6 +10,7 @@ import time
 from backend.ssh_client import SSHClientManager
 from backend.auth import ZeroTrustAuth
 from gui.config import ConfigPanel
+from gui.history_viewer import HistoryViewer
 
 
 class TerminalWidget(QTextEdit):
@@ -39,6 +40,17 @@ class TerminalWidget(QTextEdit):
         self.ssh_channel = channel
         if channel:
             self._start_read_thread()
+
+    def set_command_logger(self, logger_callable):
+        """Set a callable to be invoked with the command text after sending to SSH.
+
+        The callable should accept a single string argument (the command).
+        """
+        self._command_logger = logger_callable
+
+    def set_close_callback(self, close_callable):
+        """Set a callable to be invoked when the terminal requests the SSH session to close."""
+        self._close_callback = close_callable
     
     def _start_read_thread(self):
         """Start a background thread to read from the SSH channel."""
@@ -108,6 +120,13 @@ class TerminalWidget(QTextEdit):
             time.sleep(0.2)
         except Exception as e:
             self.log(f'[SSH send error: {e}]')
+        else:
+            # log the command to persistent storage if a logger was provided
+            try:
+                if hasattr(self, '_command_logger') and callable(self._command_logger):
+                    self._command_logger(command)
+            except Exception:
+                pass
         
     def mousePressEvent(self, event):
         """Prevent clicking on text outside the current line."""
@@ -221,6 +240,12 @@ class TerminalWidget(QTextEdit):
                         except Exception:
                             pass
                         self.ssh_channel = None
+                        # notify manager to close and mark session ended
+                        try:
+                            if hasattr(self, '_close_callback') and callable(self._close_callback):
+                                self._close_callback()
+                        except Exception:
+                            pass
                         self._print_prompt()
                     else:
                         self.log('[No SSH connection to close]')
@@ -317,11 +342,12 @@ class MainWindow(QMainWindow):
         # buttons
         self.connect_btn = QPushButton('Connect')
         self.config_btn = QPushButton('Config')
-        self.log_btn = QPushButton('Log')
+        self.history_btn = QPushButton('History')
         self.debug_btn = QPushButton('🐛 Debug')
 
         self.connect_btn.clicked.connect(self.on_connect)
         self.config_btn.clicked.connect(self.show_config_panel)
+        self.history_btn.clicked.connect(self.show_history_panel)
         self.debug_btn.clicked.connect(self.on_toggle_debug)
 
         # add widgets
@@ -334,8 +360,8 @@ class MainWindow(QMainWindow):
         form.addWidget(self.keypath_in)
         form.addWidget(self.connect_btn)
         form.addWidget(self.config_btn)
+        form.addWidget(self.history_btn)
         form.addWidget(self.debug_btn)
-        form.addWidget(self.log_btn)
 
         layout.addLayout(form)
 
@@ -388,6 +414,22 @@ class MainWindow(QMainWindow):
         else:
             self.config_dock.show()
 
+    def show_history_panel(self):
+        if not hasattr(self, 'history_dock') or self.history_dock is None:
+            self.history_dock = QDockWidget("Session & Login History", self)
+            self.history_dock.setAllowedAreas(Qt.RightDockWidgetArea | Qt.LeftDockWidgetArea)
+            history_widget = HistoryViewer()
+            # import db module to pass to history viewer
+            try:
+                import db.db as db_module
+            except Exception:
+                from db import db as db_module
+            history_widget.set_db_module(db_module)
+            self.history_dock.setWidget(history_widget)
+            self.addDockWidget(Qt.RightDockWidgetArea, self.history_dock)
+        else:
+            self.history_dock.show()
+
     def on_connect(self):
         host = self.host_in.text().strip()
         port = int(self.port_in.text().strip() or 22)
@@ -408,6 +450,12 @@ class MainWindow(QMainWindow):
                 self.log('SSH session established.')
                 # connect SSH channel to terminal for interactive I/O
                 self.terminal.set_ssh_channel(chan)
+                # wire command logging and close callback so commands are persisted
+                try:
+                    self.terminal.set_command_logger(self.ssh_manager.log_command)
+                    self.terminal.set_close_callback(self.ssh_manager.close)
+                except Exception:
+                    pass
             else:
                 self.log('Failed to obtain interactive channel.')
         except Exception as e:
@@ -423,7 +471,13 @@ class MainWindow(QMainWindow):
                                                              key_filename=keypath, key_passphrase=passphrase)
                         if chan:
                             self.log('SSH session established (using provided passphrase).')
-                            return
+                            # connect channel and wire logging similarly to non-passphrase flow
+                            self.terminal.set_ssh_channel(chan)
+                            try:
+                                self.terminal.set_command_logger(self.ssh_manager.log_command)
+                                self.terminal.set_close_callback(self.ssh_manager.close)
+                            except Exception:
+                                pass
                         else:
                             self.log('Failed to obtain interactive channel (after passphrase).')
                     except Exception as e2:

@@ -4,6 +4,18 @@ It performs local checks: key file exists, policy allows host/user, and returns 
 import os
 from models.policy import PolicyStore
 
+# local DB helpers for logging failed authentication
+try:
+    from db.db import log_login_attempt
+except Exception:
+    # relative import fallback if package layout differs
+    try:
+        from ..db.db import log_login_attempt
+    except Exception:
+        # if import fails, define a no-op function
+        def log_login_attempt(*args, **kwargs):
+            pass
+
 
 class ZeroTrustAuth:
     def __init__(self, policy_path: str = 'policies.json'):
@@ -19,13 +31,23 @@ class ZeroTrustAuth:
         # Check key existence if provided
         if keypath:
             if not os.path.exists(keypath):
-                return False, 'private key not found'
+                reason = 'private key not found'
+                try:
+                    log_login_attempt(user, host, status='failed', reason=reason)
+                except Exception:
+                    pass
+                return False, reason
 
 
         # Basic policy check
         allowed = self.policy.is_allowed(user=user, host=host)
         if not allowed:
-            return False, 'policy disallows access to this host for this user'
+            reason = 'policy disallows access to this host for this user'
+            try:
+                log_login_attempt(user, host, status='failed', reason=reason)
+            except Exception:
+                pass
+            return False, reason
 
 
         # Placeholder for additional checks (device fingerprint, geolocation, etc.)
