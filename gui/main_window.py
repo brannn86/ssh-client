@@ -69,6 +69,8 @@ class TerminalWidget(QTextEdit):
                     data = self.ssh_channel.recv(1024)
                     if data:
                         text = data.decode('utf-8', errors='replace')
+                        # filter out ANSI escape sequences and control characters
+                        text = self._filter_ansi_codes(text)
                         # display output via Qt signal-safe method
                         self.log(text.rstrip('\r\n'))
                 else:
@@ -77,6 +79,19 @@ class TerminalWidget(QTextEdit):
             # connection closed or error
             self.log(f'[SSH connection closed: {e}]')
             self.thread_running = False
+    
+    def _filter_ansi_codes(self, text: str) -> str:
+        """Remove ANSI escape sequences and control characters from text."""
+        import re
+        # Remove ANSI escape sequences (colors, cursor movement, etc.)
+        ansi_escape = re.compile(r'\x1b\[[0-9;]*m|\x1b\[[0-9;]*[A-Za-z]|\x1b\[.*?[@-~]')
+        text = ansi_escape.sub('', text)
+        
+        # Remove other control characters except newline, tab, and carriage return
+        # Keep: \n (10), \r (13), \t (9)
+        text = ''.join(char for char in text if ord(char) >= 32 or char in '\n\r\t')
+        
+        return text
     
     def _print_prompt(self):
         """Add a new prompt line."""
