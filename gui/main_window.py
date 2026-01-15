@@ -582,3 +582,24 @@ class MainWindow(QMainWindow):
             self.command_input.clear()
         else:
             self.log('[Terminal not available]')
+
+    def closeEvent(self, event):
+        """Handle application close event - disconnect SSH session."""
+        try:
+            # Stop the terminal read thread if running
+            if hasattr(self, 'terminal') and self.terminal:
+                self.terminal.thread_running = False
+                if self.terminal.read_thread and self.terminal.read_thread.is_alive():
+                    self.terminal.read_thread.join(timeout=1.0)
+        except Exception:
+            pass
+        
+        try:
+            # Close SSH connection
+            if hasattr(self, 'ssh_manager') and self.ssh_manager:
+                self.ssh_manager.close()
+        except Exception:
+            pass
+        
+        # Continue with normal close
+        super().closeEvent(event)
