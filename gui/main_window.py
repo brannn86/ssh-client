@@ -356,11 +356,13 @@ class MainWindow(QMainWindow):
 
         # buttons
         self.connect_btn = QPushButton('Connect')
+        self.disconnect_btn = QPushButton('Disconnect')
         self.config_btn = QPushButton('Config')
         self.history_btn = QPushButton('History')
         self.debug_btn = QPushButton('🐛 Debug')
 
         self.connect_btn.clicked.connect(self.on_connect)
+        self.disconnect_btn.clicked.connect(self.on_disconnect)
         self.config_btn.clicked.connect(self.show_config_panel)
         self.history_btn.clicked.connect(self.show_history_panel)
         self.debug_btn.clicked.connect(self.on_toggle_debug)
@@ -374,6 +376,7 @@ class MainWindow(QMainWindow):
         form.addWidget(self.user_in)
         form.addWidget(self.keypath_in)
         form.addWidget(self.connect_btn)
+        form.addWidget(self.disconnect_btn)
         form.addWidget(self.config_btn)
         form.addWidget(self.history_btn)
         form.addWidget(self.debug_btn)
@@ -535,6 +538,24 @@ class MainWindow(QMainWindow):
             self.log(f'Connection error: {e}')
             # dump debug info about key attempts if available
             self._log_debug_key_attempts()
+
+    def on_disconnect(self):
+        """Disconnect from the SSH session."""
+        try:
+            # Stop the terminal read thread
+            if hasattr(self, 'terminal') and self.terminal:
+                self.terminal.thread_running = False
+                if self.terminal.ssh_channel:
+                    self.terminal.ssh_channel.close()
+                self.terminal.ssh_channel = None
+            
+            # Close SSH connection
+            if hasattr(self, 'ssh_manager') and self.ssh_manager:
+                self.ssh_manager.close()
+            
+            self.log('[SSH session disconnected]')
+        except Exception as e:
+            self.log(f'[Disconnect error: {e}]')
 
     def on_debug_bypass(self):
         """Deprecated compatibility shim: kept for older wiring."""
