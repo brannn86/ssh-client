@@ -1,16 +1,22 @@
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QLineEdit, QPushButton, QTextEdit, QDockWidget, QMessageBox
+    QLineEdit, QPushButton, QTextEdit, QDockWidget, QMessageBox, QDialog, QScrollArea, QApplication
 )
 from PySide6.QtWidgets import QInputDialog
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QFont, QColor
+from PySide6.QtGui import QFont, QColor, QPixmap, QImage, QClipboard
 import threading
 import time
+import io
 from backend.ssh_client import SSHClientManager
 from backend.auth import ZeroTrustAuth
 from gui.config import ConfigPanel
 from gui.history_viewer import HistoryViewer
+
+try:
+    import qrcode
+except ImportError:
+    qrcode = None
 
 
 class TerminalWidget(QTextEdit):
@@ -491,18 +497,8 @@ class MainWindow(QMainWindow):
             # Check if this is a new TOTP setup
             if reason.startswith('TOTP setup required:'):
                 provisioning_uri = reason.split(':', 1)[1]
-                self.log('[New TOTP account detected - provisioning URI generated]')
-                self.log('[Please scan the QR code with your authenticator app to set up TOTP]')
-                self.log(f'[Provisioning URI: {provisioning_uri}]')
-                # Show QR code info dialog
-                QMessageBox.information(
-                    self,
-                    'TOTP Setup Required',
-                    f'A new TOTP account has been created for {user}.\n\n'
-                    'Please scan this URI with your authenticator app (Google Authenticator, Authy, etc.):\n\n'
-                    f'{provisioning_uri}\n\n'
-                    'After scanning, enter the 6-digit code to proceed.'
-                )
+                self.log('[New TOTP account detected - QR code dialog opening]')
+                self._show_totp_qr_dialog(provisioning_uri, user)
             
             totp_code, ok_input = QInputDialog.getText(
                 self, 'TOTP Authentication Required',
@@ -567,6 +563,110 @@ class MainWindow(QMainWindow):
             self.log(f'Connection error: {e}')
             # dump debug info about key attempts if available
             self._log_debug_key_attempts()
+
+    def _copy_to_clipboard(self, text: str):
+        """Copy text to clipboard."""
+        try:
+            clipboard = QApplication.clipboard()
+            clipboard.setText(text)
+            self.log('[URI copied to clipboard]')
+        except Exception as e:
+            self.log(f'[Error copying to clipboard: {e}]')
+
+    def _show_totp_qr_dialog(self, provisioning_uri: str, user: str):
+        """Display QR code for TOTP setup in a dialog."""
+        if qrcode is None:
+            # Fallback: just show the URI
+            QMessageBox.information(
+                self,
+                'TOTP Setup Required',
+                f'A new TOTP account has been created for {user}.\n\n'
+                'Please enter this URI in your authenticator app:\n\n'
+                f'{provisioning_uri}'
+            )
+            return
+        
+        try:
+            # Generate QR code
+            qr = qrcode.QRCode(version=1, box_size=10, border=2)
+            qr.add_data(provisioning_uri)
+            qr.make(fit=True)
+            
+            # Convert PIL image to QImage
+            pil_image = qr.make_image(fill_color='black', back_color='white').convert('RGB')
+            
+            # Convert PIL image to QImage
+            width, height = pil_image.size
+            rgb_image = pil_image.tobytes('raw', 'RGB')
+            qimage = QImage(rgb_image, width, height, 3 * width, QImage.Format_RGB888)
+            
+            # Create QPixmap from QImage
+            pixmap = QPixmap.fromImage(qimage)
+            
+            # Create a custom dialog with QR code
+            dialog = QDialog(self)
+            dialog.setWindowTitle('TOTP Setup - Scan QR Code')
+            dialog.setMinimumSize(500, 600)
+            
+            layout = QVBoxLayout()
+            
+            # Instructions
+            instructions = QLabel(
+                f'A new TOTP account has been created for {user}.\n\n'
+                'Scan this QR code with Google Authenticator, Authy, or any TOTP app:'
+            )
+            instructions.setWordWrap(True)
+            layout.addWidget(instructions)
+            
+            # QR code image
+            qr_label = QLabel()
+            scaled_pixmap = pixmap.scaledToWidth(300, Qt.SmoothTransformation)
+            qr_label.setPixmap(scaled_pixmap)
+            qr_label.setAlignment(Qt.AlignCenter)
+            layout.addWidget(qr_label)
+            
+            # Fallback URI section
+            uri_label = QLabel('Or enter manually:')
+            layout.addWidget(uri_label)
+            
+            # URI text box (selectable and copyable)
+            uri_text = QTextEdit()
+            uri_text.setText(provisioning_uri)
+            uri_text.setReadOnly(True)
+            uri_text.setMaximumHeight(50)
+            uri_text.setStyleSheet('font-family: monospace; font-size: 9pt;')
+            layout.addWidget(uri_text)
+            
+            # Buttons layout
+            buttons_layout = QHBoxLayout()
+            buttons_layout.addStretch()
+            
+            # Copy button
+            copy_btn = QPushButton('Copy to Clipboard')
+            copy_btn.clicked.connect(lambda: self._copy_to_clipboard(provisioning_uri))
+            buttons_layout.addWidget(copy_btn)
+            
+            # OK button
+            ok_btn = QPushButton('OK')
+            ok_btn.clicked.connect(dialog.accept)
+            buttons_layout.addWidget(ok_btn)
+            
+            layout.addLayout(buttons_layout)
+            
+            dialog.setLayout(layout)
+            dialog.exec()
+        except Exception as e:
+            self.log(f'[Error generating QR code: {e}]')
+            import traceback
+            traceback.print_exc()
+            # Fallback to text-only display
+            QMessageBox.information(
+                self,
+                'TOTP Setup Required',
+                f'A new TOTP account has been created for {user}.\n\n'
+                'Please enter this URI in your authenticator app:\n\n'
+                f'{provisioning_uri}'
+            )
 
     def on_disconnect(self):
         """Disconnect from the SSH session."""
