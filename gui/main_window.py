@@ -365,7 +365,17 @@ class MainWindow(QMainWindow):
 
         layout.addLayout(form)
 
+        # Command input field
+        input_layout = QHBoxLayout()
+        self.command_input = QLineEdit()
+        self.command_input.setPlaceholderText('Enter command...')
+        self.command_input.returnPressed.connect(self.on_send_command)
+        input_layout.addWidget(self.command_input)
+        layout.addLayout(input_layout)
+
+        # Terminal display (output only)
         self.terminal = TerminalWidget()
+        self.terminal.setReadOnly(True)
         layout.addWidget(self.terminal)
 
         central_widget.setLayout(layout)
@@ -538,3 +548,16 @@ class MainWindow(QMainWindow):
         self.log(f'🐛 DEBUG {status} — bypass={self.debug_mode}, key-logs={self.debug_key_logging}')
         # visual indicator: red when enabled
         self.debug_btn.setStyleSheet('background-color: #ff6b6b;' if self.debug_mode else '')
+
+    def on_send_command(self):
+        """Send the command from the input field to the SSH terminal."""
+        command = self.command_input.text().strip()
+        if not command:
+            return
+        
+        # Send the command to the terminal if connected
+        if hasattr(self, 'terminal') and self.terminal:
+            self.terminal._send_command_to_ssh(command)
+            self.command_input.clear()
+        else:
+            self.log('[Terminal not available]')
