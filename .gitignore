@@ -4,3 +4,4 @@ __pycache__/
 .env
 policies.json
 totp_secrets.json
+zt_ssh.db
