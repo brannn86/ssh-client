@@ -11,6 +11,11 @@ from backend.ssh_client import SSHClientManager
 from backend.auth import ZeroTrustAuth
 from gui.config import ConfigPanel
 from gui.history_viewer import HistoryViewer
+# Optional pyte-based terminal; fall back to built-in TerminalWidget
+try:
+    from gui.pyte_terminal import PyteTerminalWidget as PyteTerminal
+except Exception:
+    PyteTerminal = None
 
 
 class TerminalWidget(QTextEdit):
@@ -316,7 +321,7 @@ class MainWindow(QMainWindow):
 
         self._build_ui()
 
-        self.log('Welcome to Zero Trust SSH Client. Enter host, username, and port to start connecting.')
+        # self.log('Welcome to Zero Trust SSH Client. Enter host, username, and port to start connecting.')
         self.ssh_manager = SSHClientManager()
         self.auth = ZeroTrustAuth()
 
@@ -365,14 +370,55 @@ class MainWindow(QMainWindow):
 
         layout.addLayout(form)
 
-        self.terminal = TerminalWidget()
+        # prefer pyte-backed terminal if available (better ANSI handling)
+        if PyteTerminal is not None:
+            try:
+                self.terminal = PyteTerminal()
+            except Exception:
+                self.terminal = TerminalWidget()
+        else:
+            self.terminal = TerminalWidget()
         layout.addWidget(self.terminal)
 
         central_widget.setLayout(layout)
         self.setCentralWidget(central_widget)  # IMPORTANT!
 
     def log(self, text: str):
-        self.terminal.append(text)
+        """Write a message to the terminal widget or stdout if unavailable."""
+        try:
+            if hasattr(self, 'terminal') and self.terminal is not None:
+                # terminal may be a pyte widget (QPlainTextEdit) or QTextEdit
+                try:
+                    # prefer append-like API
+                    append = getattr(self.terminal, 'append', None)
+                    if callable(append):
+                        append(text)
+                        return
+                except Exception:
+                    pass
+                try:
+                    # fallback for QPlainTextEdit
+                    set_text = getattr(self.terminal, 'setPlainText', None)
+                    if callable(set_text):
+                        # append to existing content
+                        cur = self.terminal.toPlainText()
+                        if cur:
+                            self.terminal.setPlainText(cur + '\n' + text)
+                        else:
+                            self.terminal.setPlainText(text)
+                        return
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        # final fallback
+        try:
+            print(text)
+        except Exception:
+            pass
+
+    # def log(self, text: str):
+        # self.terminal.append(text)
 
     def _log_debug_key_attempts(self):
         """If debug logging is enabled, dump the SSHClientManager.debug_key_attempts entries.
