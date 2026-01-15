@@ -2,14 +2,14 @@
 import sqlite3
 
 import os
-from datetime import datetime
+from datetime import datetime, UTC
 
 
 DB_PATH = 'zt_ssh.db'
 
 
 def _now_iso():
-    return datetime.utcnow().isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def init_db():

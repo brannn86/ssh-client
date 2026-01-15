@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QLineEdit, QPushButton, QTextEdit, QDockWidget
+    QLineEdit, QPushButton, QTextEdit, QDockWidget, QMessageBox
 )
 from PySide6.QtWidgets import QInputDialog
 from PySide6.QtCore import Qt
@@ -485,6 +485,35 @@ class MainWindow(QMainWindow):
         self.log(f'Attempting to authenticate {user}@{host}:{port}...')
 
         ok, reason = self.auth.pre_check(user=user, host=host, keypath=keypath)
+        
+        # Handle TOTP requirement
+        if not ok and (reason == 'TOTP required' or reason.startswith('TOTP setup required:')):
+            # Check if this is a new TOTP setup
+            if reason.startswith('TOTP setup required:'):
+                provisioning_uri = reason.split(':', 1)[1]
+                self.log('[New TOTP account detected - provisioning URI generated]')
+                self.log('[Please scan the QR code with your authenticator app to set up TOTP]')
+                self.log(f'[Provisioning URI: {provisioning_uri}]')
+                # Show QR code info dialog
+                QMessageBox.information(
+                    self,
+                    'TOTP Setup Required',
+                    f'A new TOTP account has been created for {user}.\n\n'
+                    'Please scan this URI with your authenticator app (Google Authenticator, Authy, etc.):\n\n'
+                    f'{provisioning_uri}\n\n'
+                    'After scanning, enter the 6-digit code to proceed.'
+                )
+            
+            totp_code, ok_input = QInputDialog.getText(
+                self, 'TOTP Authentication Required',
+                'Enter 6-digit TOTP code:', QLineEdit.Normal
+            )
+            if ok_input and totp_code:
+                ok, reason = self.auth.pre_check(user=user, host=host, keypath=keypath, totp_code=totp_code)
+            else:
+                self.log('TOTP code not provided; aborting connection.')
+                return
+        
         if not ok:
             self.log(f'AUTH DENIED: {reason}')
             return
