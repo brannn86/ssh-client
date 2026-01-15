@@ -9,6 +9,7 @@ If you happened to somehow stumble into this repo, I will try to document the pr
 ## Requirements
 
 ```bash
+  Python=3.14.0
   PySide6>=6.10
   paramiko>=4.0
   cryptography>=46.0
