@@ -575,12 +575,29 @@ class MainWindow(QMainWindow):
             if hasattr(self, 'terminal') and self.terminal:
                 self.terminal.thread_running = False
                 if self.terminal.ssh_channel:
-                    self.terminal.ssh_channel.close()
+                    try:
+                        self.terminal.ssh_channel.close()
+                    except Exception:
+                        pass
                 self.terminal.ssh_channel = None
             
-            # Close SSH connection
+            # Close SSH connection (log session end to DB)
             if hasattr(self, 'ssh_manager') and self.ssh_manager:
-                self.ssh_manager.close()
+                if self.ssh_manager.client:
+                    try:
+                        self.ssh_manager.client.close()
+                    except Exception:
+                        pass
+                    self.ssh_manager.client = None
+                
+                # Mark session end in DB
+                try:
+                    if getattr(self.ssh_manager, 'active_session_id', None) is not None:
+                        from db.db import log_session_end
+                        log_session_end(self.ssh_manager.active_session_id, status='closed')
+                        self.ssh_manager.active_session_id = None
+                except Exception:
+                    pass
             
             self.log('[SSH session disconnected]')
         except Exception as e:
