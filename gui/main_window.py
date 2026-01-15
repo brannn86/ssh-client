@@ -555,6 +555,12 @@ class MainWindow(QMainWindow):
         if not command:
             return
         
+        # Handle local 'clear' command
+        if command.lower() == 'clear':
+            self.terminal.clear()
+            self.command_input.clear()
+            return
+        
         # Send the command to the terminal if connected
         if hasattr(self, 'terminal') and self.terminal:
             self.terminal._send_command_to_ssh(command)
