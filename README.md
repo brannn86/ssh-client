@@ -6,9 +6,18 @@ An SSH client with partial zero trust implemented into it. This project is made 
 If you happened to somehow stumble into this repo, I will try to document the project as much as possible.
 
 
-## Tech Stack
+## Requirements
 
-**Client:** Python, PySide6, Paramiko, Cryptography, PySQLite3
+```bash
+  PySide6>=6.10
+  paramiko>=4.0
+  cryptography>=46.0
+  bcrypt>=5.0
+  PyNaCl>=1.5
+  pyotp>=2.9.0
+  qrcode>=7.4
+  Pillow>=10.0.0
+```
 
 
 ## Run Locally (venv recommended)
@@ -40,12 +49,12 @@ Run the program
 
 ## Roadmap
 
-- Base UI Functionality done
+- Base UI Functionality ✅
 
-- SSH Connection using Paramiko done
+- SSH Connection using Paramiko ✅
 
-- Zero Trust auth and checks 
+- Zero Trust auth and checks ✅
 
-- Store connection policies
+- Store connection policies ✅
 
-- DB with sqlite to store logs and history
+- DB with sqlite to store logs and history ✅
