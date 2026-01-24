@@ -337,7 +337,7 @@ class MainWindow(QMainWindow):
 
         self._build_ui()
 
-        # self.log('Welcome to Zero Trust SSH Client. Enter host, username, and port to start connecting.')
+        self.log('Welcome to Zero Trust SSH Client. Enter host, username, and port to start connecting.')
         self.ssh_manager = SSHClientManager()
         self.auth = ZeroTrustAuth()
 
@@ -365,13 +365,13 @@ class MainWindow(QMainWindow):
         self.disconnect_btn = QPushButton('Disconnect')
         self.config_btn = QPushButton('Config')
         self.history_btn = QPushButton('History')
-        self.debug_btn = QPushButton('🐛 Debug')
+        # self.debug_btn = QPushButton('Debug')
 
         self.connect_btn.clicked.connect(self.on_connect)
         self.disconnect_btn.clicked.connect(self.on_disconnect)
         self.config_btn.clicked.connect(self.show_config_panel)
         self.history_btn.clicked.connect(self.show_history_panel)
-        self.debug_btn.clicked.connect(self.on_toggle_debug)
+        # self.debug_btn.clicked.connect(self.on_toggle_debug)
 
         # add widgets
         form.addWidget(QLabel('Host:'))
@@ -385,7 +385,7 @@ class MainWindow(QMainWindow):
         form.addWidget(self.disconnect_btn)
         form.addWidget(self.config_btn)
         form.addWidget(self.history_btn)
-        form.addWidget(self.debug_btn)
+        # form.addWidget(self.debug_btn)
 
         layout.addLayout(form)
 
@@ -674,11 +674,9 @@ class MainWindow(QMainWindow):
             # Stop the terminal read thread
             if hasattr(self, 'terminal') and self.terminal:
                 self.terminal.thread_running = False
-                if self.terminal.ssh_channel:
-                    try:
-                        self.terminal.ssh_channel.close()
-                    except Exception:
-                        pass
+                # Wait briefly for thread to stop
+                if self.terminal.read_thread and self.terminal.read_thread.is_alive():
+                    self.terminal.read_thread.join(timeout=0.5)
                 self.terminal.ssh_channel = None
             
             # Close SSH connection (log session end to DB)

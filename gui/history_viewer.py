@@ -286,3 +286,65 @@ class HistoryViewer(QWidget):
         """Return a gray color for closed status."""
         from PySide6.QtGui import QColor
         return QColor(211, 211, 211)  # light gray
+
+    def verify_totp(self, user, totp_code):
+        """Verify the TOTP code for 2FA."""
+        if not self.db_module:
+            return False
+        
+        try:
+            # Placeholder: Replace with actual TOTP verification logic
+            import pyotp
+            user_totp_secret = self.db_module.get_user_totp_secret(user)
+            if not user_totp_secret:
+                return False
+            
+            totp = pyotp.TOTP(user_totp_secret)
+            return totp.verify(totp_code)
+        except Exception:
+            return False
+
+    def log_login_attempt(self, user, host, status, reason):
+        """Log the login attempt in the database."""
+        if not self.db_module:
+            return
+        
+        try:
+            self.db_module.log_login_attempt(user, host, status, reason)
+        except Exception:
+            pass
+
+    def authenticate_user(self, user, password, host, totp_code):
+        """Authenticate the user with password and TOTP."""
+        if not self.db_module:
+            return False, 'Database module not available'
+        
+        try:
+            # Check password validity
+            user_data = self.db_module.get_user_by_username(user)
+            if not user_data:
+                return False, 'User not found'
+            
+            stored_password = user_data['password']
+            if password != stored_password:
+                return False, 'Invalid password'
+            
+            # Verify TOTP code if 2FA is enabled
+            if user_data.get('2fa_enabled'):
+                if not self.verify_totp(user, totp_code):
+                    try:
+                        self.log_login_attempt(user, host, status='failed', reason='invalid TOTP code')
+                    except Exception:
+                        pass
+                    return False, 'Invalid TOTP code'
+
+            # Auth successful - log it
+            try:
+                self.log_login_attempt(user, host, status='success', reason='passed all checks')
+            except Exception:
+                pass
+
+            # Placeholder for additional checks (device fingerprint, geolocation, etc.)
+            return True, 'ok'
+        except Exception as e:
+            return False, str(e)

@@ -113,7 +113,6 @@ class ZeroTrustAuth:
                     pass
                 return False, reason
 
-
         # Basic policy check
         allowed = self.policy.is_allowed(user=user, host=host)
         if not allowed:
@@ -128,6 +127,7 @@ class ZeroTrustAuth:
         provisioning_uri = self.ensure_totp_enabled(user)
         
         # TOTP is always required (auto-generated if new)
+        # NOTE: Don't log here - this is just asking for TOTP, not a final result
         if not totp_code:
             if provisioning_uri:
                 # New TOTP secret created, include provisioning URI in response
@@ -135,12 +135,19 @@ class ZeroTrustAuth:
             else:
                 return False, 'TOTP required'
         
+        # Verify TOTP code
         if not self.verify_totp(user, totp_code):
             try:
                 log_login_attempt(user, host, status='failed', reason='invalid TOTP code')
             except Exception:
                 pass
-                return False, 'Invalid TOTP code'
+            return False, 'Invalid TOTP code'
+
+        # Auth successful - log it
+        try:
+            log_login_attempt(user, host, status='success', reason='passed all checks')
+        except Exception:
+            pass
 
         # Placeholder for additional checks (device fingerprint, geolocation, etc.)
         return True, 'ok'

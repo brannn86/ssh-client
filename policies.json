@@ -23,6 +23,12 @@
       "blocked_commands": [
         "rm -rf"
       ]
+    },
+    "server": {
+      "allowed_hosts": [
+        "192.168.122.189"
+      ],
+      "blocked_commands": []
     }
   }
 }
