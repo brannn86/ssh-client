@@ -43,18 +43,28 @@ class ConfigPanel(QWidget):
         allowed_hosts_layout = QVBoxLayout()
         self.allowed_hosts_list = QListWidget()
         allowed_hosts_layout.addWidget(self.allowed_hosts_list)
+        host_btn_layout = QHBoxLayout()
         add_host_btn = QPushButton("➕ Add Host")
+        del_host_btn = QPushButton("🗑️ Delete Host")
         add_host_btn.clicked.connect(self.add_allowed_host)
-        allowed_hosts_layout.addWidget(add_host_btn)
+        del_host_btn.clicked.connect(self.delete_allowed_host)
+        host_btn_layout.addWidget(add_host_btn)
+        host_btn_layout.addWidget(del_host_btn)
+        allowed_hosts_layout.addLayout(host_btn_layout)
         self.form_layout.addRow("Allowed Hosts:", allowed_hosts_layout)
 
         # Blocked Commands section
         blocked_cmds_layout = QVBoxLayout()
         self.blocked_commands_list = QListWidget()
         blocked_cmds_layout.addWidget(self.blocked_commands_list)
+        cmd_btn_layout = QHBoxLayout()
         add_cmd_btn = QPushButton("➕ Add Command")
+        del_cmd_btn = QPushButton("🗑️ Delete Command")
         add_cmd_btn.clicked.connect(self.add_blocked_command)
-        blocked_cmds_layout.addWidget(add_cmd_btn)
+        del_cmd_btn.clicked.connect(self.delete_blocked_command)
+        cmd_btn_layout.addWidget(add_cmd_btn)
+        cmd_btn_layout.addWidget(del_cmd_btn)
+        blocked_cmds_layout.addLayout(cmd_btn_layout)
         self.form_layout.addRow("Blocked Commands:", blocked_cmds_layout)
 
         self.layout.addLayout(self.form_layout)
@@ -125,12 +135,26 @@ class ConfigPanel(QWidget):
             item.setFlags(item.flags() | Qt.ItemIsEditable)
             self.allowed_hosts_list.addItem(item)
 
+    def delete_allowed_host(self):
+        current_item = self.allowed_hosts_list.currentItem()
+        if current_item:
+            self.allowed_hosts_list.takeItem(self.allowed_hosts_list.row(current_item))
+        else:
+            QMessageBox.warning(self, "No Selection", "Please select a host to delete.")
+
     def add_blocked_command(self):
         cmd, ok = QInputDialog.getText(self, "Add Command", "Enter command to block:")
         if ok and cmd.strip():
             item = QListWidgetItem(cmd.strip())
             item.setFlags(item.flags() | Qt.ItemIsEditable)
             self.blocked_commands_list.addItem(item)
+
+    def delete_blocked_command(self):
+        current_item = self.blocked_commands_list.currentItem()
+        if current_item:
+            self.blocked_commands_list.takeItem(self.blocked_commands_list.row(current_item))
+        else:
+            QMessageBox.warning(self, "No Selection", "Please select a command to delete.")
 
     def save_config(self):
         username = self.user_field.text().strip()
