@@ -30,6 +30,7 @@ class ZeroTrustAuth:
         self.debug_bypass = False  # DEBUG: Set to True to bypass policy checks
         self.totp_secrets_path = totp_secrets_path
         self.totp_secrets = self._load_totp_secrets()
+        self.user = None  # Will be set when user authenticates
 
 
     def _load_totp_secrets(self) -> dict:

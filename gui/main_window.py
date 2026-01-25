@@ -134,6 +134,20 @@ class TerminalWidget(QTextEdit):
             self._print_prompt()
             return
         
+        # Check if command is blocked by policy
+        if hasattr(self, 'auth') and self.auth and self.auth.user:
+            is_allowed, reason = self.auth.policy.is_command_allowed(self.auth.user, command)
+            if not is_allowed:
+                self.log(f'[{reason}]')
+                # Log blocked command attempt
+                if hasattr(self, '_command_logger') and callable(self._command_logger):
+                    try:
+                        self._command_logger(command, is_blocked=True, reason=reason)
+                    except Exception:
+                        pass
+                self._print_prompt()
+                return
+        
         try:
             # send command with newline
             self.ssh_channel.send(command + '\n')
@@ -335,11 +349,11 @@ class MainWindow(QMainWindow):
         self.debug_mode = False
         self.debug_key_logging = False
 
-        self._build_ui()
-
-        self.log('Welcome to Zero Trust SSH Client. Enter host, username, and port to start connecting.')
+        # Initialize auth before building UI so it can be passed to terminal
         self.ssh_manager = SSHClientManager()
         self.auth = ZeroTrustAuth()
+
+        self._build_ui()
 
     def _build_ui(self):
         central_widget = QWidget()
@@ -400,10 +414,15 @@ class MainWindow(QMainWindow):
         # Terminal display (output only)
         self.terminal = TerminalWidget()
         self.terminal.setReadOnly(True)
+        # Pass auth object to terminal for command policy checks
+        self.terminal.auth = self.auth
         layout.addWidget(self.terminal)
 
         central_widget.setLayout(layout)
         self.setCentralWidget(central_widget)  # IMPORTANT!
+        
+        # Now that UI is built, show welcome message
+        self.log('Welcome to Zero Trust SSH Client. Enter host, username, and port to start connecting.')
 
     def log(self, text: str):
         """Write a message to the terminal widget or stdout if unavailable."""
@@ -514,6 +533,9 @@ class MainWindow(QMainWindow):
             self.log(f'AUTH DENIED: {reason}')
             return
 
+        # Store the authenticated user in auth object for policy checks during command execution
+        self.auth.user = user
+        
         self.log('Auth OK — opening SSH session...')
         try:
             chan = self.ssh_manager.open_session(host=host, port=port, username=user, key_filename=keypath)

@@ -228,13 +228,17 @@ class SSHClientManager:
         except Exception:
             pass
 
-    def log_command(self, command_text: str):
+    def log_command(self, command_text: str, is_blocked: bool = False, reason: str = ''):
         """Log an executed command (or other event) associated with the active session."""
         try:
             sid = getattr(self, 'active_session_id', None)
             if sid is not None:
-                # include a short prefix so events are clear
-                log_event(sid, f'cmd: {command_text}')
+                if is_blocked:
+                    # Log blocked command with reason
+                    log_event(sid, f'blocked: {command_text} ({reason})')
+                else:
+                    # Log executed command
+                    log_event(sid, f'cmd: {command_text}')
         except Exception:
             # swallow DB errors to avoid breaking terminal I/O
             pass
