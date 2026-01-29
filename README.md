@@ -48,6 +48,60 @@ Run the program
 ```
 
 
+## Security Testing Framework
+
+This project now includes a **comprehensive security testing framework** for testing SSH connections and servers.
+
+### Quick Start
+
+**From GUI:**
+1. Open the SSH client
+2. Enter target host and port
+3. Click "Test Security" button
+4. Results appear in terminal and are saved to CSV
+
+**From Command Line:**
+```bash
+python test_runner.py -H example.com
+python test_runner.py -H example.com -p 2222 --timeout 15
+```
+
+**From Python Code:**
+```python
+from testing.security_tester import SecurityTester
+tester = SecurityTester(host='example.com', port=22)
+results = tester.run_all_tests()
+```
+
+### What's Tested
+
+- Connection availability
+- Brute force resistance
+- Failed login attempts
+- Timeout handling
+- SSH key rejection
+- Concurrent connections
+- Credential caching
+- Error message disclosure
+
+### Output
+
+- Real-time console output
+- CSV reports with detailed metrics
+- Summary statistics
+- Historical tracking
+
+### Documentation
+
+- [FRAMEWORK_SUMMARY.md](FRAMEWORK_SUMMARY.md) - Overview
+- [TESTING_QUICK_START.md](TESTING_QUICK_START.md) - Getting started
+- [SECURITY_TESTING.md](SECURITY_TESTING.md) - Complete reference
+- [QUICK_REFERENCE.md](QUICK_REFERENCE.md) - Quick lookup
+- [DOCUMENTATION_INDEX.md](DOCUMENTATION_INDEX.md) - All docs
+
+For more details, see [DOCUMENTATION_INDEX.md](DOCUMENTATION_INDEX.md).
+
+
 ## Roadmap
 
 - Base UI Functionality ✅
@@ -59,3 +113,5 @@ Run the program
 - Store connection policies ✅
 
 - DB with sqlite to store logs and history ✅
+
+- Security Testing Framework ✅

@@ -12,6 +12,8 @@ from backend.ssh_client import SSHClientManager
 from backend.auth import ZeroTrustAuth
 from gui.config import ConfigPanel
 from gui.history_viewer import HistoryViewer
+from testing.security_tester import SecurityTester
+from utilities.csv_reporter import CSVReporter
 
 try:
     import qrcode
@@ -379,12 +381,14 @@ class MainWindow(QMainWindow):
         self.disconnect_btn = QPushButton('Disconnect')
         self.config_btn = QPushButton('Config')
         self.history_btn = QPushButton('History')
+        self.test_security_btn = QPushButton('Test Security')
         # self.debug_btn = QPushButton('Debug')
 
         self.connect_btn.clicked.connect(self.on_connect)
         self.disconnect_btn.clicked.connect(self.on_disconnect)
         self.config_btn.clicked.connect(self.show_config_panel)
         self.history_btn.clicked.connect(self.show_history_panel)
+        self.test_security_btn.clicked.connect(self.on_test_security)
         # self.debug_btn.clicked.connect(self.on_toggle_debug)
 
         # add widgets
@@ -399,6 +403,7 @@ class MainWindow(QMainWindow):
         form.addWidget(self.disconnect_btn)
         form.addWidget(self.config_btn)
         form.addWidget(self.history_btn)
+        form.addWidget(self.test_security_btn)
         # form.addWidget(self.debug_btn)
 
         layout.addLayout(form)
@@ -769,6 +774,116 @@ class MainWindow(QMainWindow):
             self.command_input.clear()
         else:
             self.log('[Terminal not available]')
+
+    def on_test_security(self):
+        """Run security tests on the configured SSH host."""
+        host = self.host_in.text().strip()
+        
+        if not host:
+            QMessageBox.warning(self, 'Input Required', 'Please enter a host to test.')
+            return
+        
+        try:
+            port = int(self.port_in.text().strip() or 22)
+        except ValueError:
+            QMessageBox.warning(self, 'Invalid Port', 'Port must be a valid integer.')
+            return
+        
+        # Disable button during test
+        self.test_security_btn.setEnabled(False)
+        self.test_security_btn.setText('Testing...')
+        
+        # Run tests in background thread to avoid blocking UI
+        def run_tests_background():
+            try:
+                self.log('[*] Starting security tests...')
+                self.log(f'[*] Target: {host}:{port}')
+                self.log('')
+                
+                # Initialize tester
+                tester = SecurityTester(host=host, port=port, timeout=5)
+                
+                # Run all tests
+                test_results = tester.run_all_tests()
+                
+                # Get summary
+                summary = tester.get_summary()
+                
+                # Display results in terminal
+                self.log('=' * 70)
+                self.log('SECURITY TEST RESULTS')
+                self.log('=' * 70)
+                self.log('')
+                
+                for test_name, metrics in test_results.items():
+                    status_symbol = '✓' if metrics.passed else '✗'
+                    self.log(f'{status_symbol} {test_name:30s} [{metrics.status:15s}] ({metrics.duration_ms:.0f}ms)')
+                    
+                    if metrics.errors:
+                        for error in metrics.errors[:2]:  # Show first 2 errors
+                            self.log(f'  ⚠ {error}')
+                    
+                    # Show key metrics
+                    if metrics.details:
+                        for key, value in list(metrics.details.items())[:2]:
+                            if isinstance(value, (int, float, bool)):
+                                self.log(f'  {key}: {value}')
+                
+                self.log('')
+                self.log('-' * 70)
+                self.log('SUMMARY')
+                self.log('-' * 70)
+                self.log(f'Total tests:        {summary["total_tests"]}')
+                self.log(f'Passed:             {summary["passed_tests"]}')
+                self.log(f'Failed:             {summary["failed_tests"]}')
+                self.log(f'Pass rate:          {summary["pass_rate_percent"]:.1f}%')
+                self.log(f'Total duration:     {summary["total_duration_ms"]:.0f}ms')
+                self.log(f'Total attempts:     {summary["total_attempts"]}')
+                self.log('')
+                
+                # Write results to CSV
+                reporter = CSVReporter(output_dir='test_results')
+                
+                # Convert metrics to dictionary format
+                results_dict = {
+                    name: {
+                        'status': metrics.status,
+                        'passed': metrics.passed,
+                        'metrics': {
+                            'duration_ms': metrics.duration_ms,
+                            'attempts': metrics.attempts,
+                            'successes': metrics.successes,
+                            'failures': metrics.failures,
+                        },
+                        'details': str(metrics.details) if metrics.details else '',
+                    }
+                    for name, metrics in test_results.items()
+                }
+                
+                # Write detailed test results
+                csv_file = reporter.write_test_results(results_dict)
+                self.log(f'[+] Detailed results saved to: {csv_file}')
+                
+                # Write summary
+                summary_file = reporter.write_summary(summary)
+                self.log(f'[+] Summary saved to: {summary_file}')
+                
+                self.log('')
+                self.log('[+] Security tests completed!')
+                
+            except Exception as e:
+                self.log(f'[!] Error during security tests: {str(e)}')
+                import traceback
+                self.log(traceback.format_exc())
+            
+            finally:
+                # Re-enable button
+                self.test_security_btn.setEnabled(True)
+                self.test_security_btn.setText('Test Security')
+        
+        # Start background thread
+        thread = threading.Thread(target=run_tests_background, daemon=True)
+        thread.start()
 
     def closeEvent(self, event):
         """Handle application close event - disconnect SSH session."""

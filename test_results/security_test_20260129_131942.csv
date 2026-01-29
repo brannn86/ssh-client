@@ -1,0 +1,9 @@
+timestamp,test_name,status,passed,metrics,details
+2026-01-29T13:19:42.571641,connection_availability,failed,False,duration_ms=5009.0199999999995 | attempts=1 | successes=0 | failures=1,{'connection': 'Connection failed with code 10035'}
+2026-01-29T13:19:42.571641,brute_force_resistance,protected,True,duration_ms=5028.51 | attempts=1 | successes=0 | failures=0,"{'rapid_failures': 1, 'rate_limiting': 'Rate limiting or connection rejection detected'}"
+2026-01-29T13:19:42.571641,failed_login_attempts,protected,True,duration_ms=5007.967 | attempts=1 | successes=0 | failures=0,"{'failed_attempts': 0, 'blocking': 'Connection blocked after failed attempts (good protection)'}"
+2026-01-29T13:19:42.571641,timeout_handling,success,True,duration_ms=513.827 | attempts=1 | successes=1 | failures=0,{'timeout': 'Timeout occurred as expected'}
+2026-01-29T13:19:42.571641,key_rejection,success,True,duration_ms=5014.673 | attempts=1 | successes=1 | failures=0,{'key_handling': 'Invalid key properly rejected'}
+2026-01-29T13:19:42.571641,concurrent_connections,protected,True,duration_ms=5016.018 | attempts=3 | successes=3 | failures=0,"{'concurrent_attempts': 3, 'connection_errors': 3, 'auth_failures': 0, 'other_errors': 3, 'result': 'Some connections rejected (rate limiting?)'}"
+2026-01-29T13:19:42.571641,credential_caching,success,True,duration_ms=37.122 | attempts=1 | successes=1 | failures=0,{'cached_credentials': 'No obvious credential caching found'}
+2026-01-29T13:19:42.571641,error_messages,success,True,duration_ms=5002.477 | attempts=1 | successes=1 | failures=0,"{'error': 'timed out', 'disclosure': 'Generic error (no information disclosure)'}"
